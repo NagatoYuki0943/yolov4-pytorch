@@ -7,13 +7,13 @@ from PIL import Image
 #---------------------------------------------------------#
 def cvtColor(image):
     if len(np.shape(image)) == 3 and np.shape(image)[2] == 3:
-        return image 
+        return image
     else:
         image = image.convert('RGB')
-        return image 
-    
+        return image
+
 #---------------------------------------------------#
-#   对输入图像进行resize
+#   对输入图像进行resize,加上灰条
 #---------------------------------------------------#
 def resize_image(image, size, letterbox_image):
     iw, ih  = image.size
@@ -57,6 +57,9 @@ def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
+#---------------------------------------------------#
+#   归一化
+#---------------------------------------------------#
 def preprocess_input(image):
     image /= 255.0
     return image
