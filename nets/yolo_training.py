@@ -7,7 +7,7 @@ import torch.nn as nn
 
 
 class YOLOLoss(nn.Module):
-    def __init__(self, anchors, num_classes, input_shape, cuda, anchors_mask = [[6,7,8], [3,4,5], [0,1,2]], label_smoothing = 0, focal_loss = False, alpha = 0.25, gamma = 2):
+    def __init__(self, anchors, num_classes, input_shape, cuda, anchors_mask = [[6,7,8], [3,4,5], [0,1,2]], label_smoothing = 0, focal_loss = False, alpha = 0.25, gamma = 2, iou_type = 'ciou'):
         super(YOLOLoss, self).__init__()
         #-----------------------------------------------------------#
         #   13x13的特征层对应的anchor是[142, 110],[192, 243],[459, 401]
@@ -30,6 +30,8 @@ class YOLOLoss(nn.Module):
         self.focal_loss_ratio   = 10
         self.alpha              = alpha
         self.gamma              = gamma
+        
+        self.iou_type           = iou_type
 
         self.ignore_threshold = 0.5
         self.cuda = cuda
@@ -48,6 +50,7 @@ class YOLOLoss(nn.Module):
         pred    = self.clip_by_tensor(pred, epsilon, 1.0 - epsilon)
         output  = - target * torch.log(pred) - (1.0 - target) * torch.log(1.0 - pred)
         return output
+<<<<<<< HEAD
 
     """
     计算ciou
@@ -58,17 +61,26 @@ class YOLOLoss(nn.Module):
         ----------
         b1: tensor, shape=(batch, feat_w, feat_h, anchor_num, 4), xywh  预测框
         b2: tensor, shape=(batch, feat_w, feat_h, anchor_num, 4), xywh  真实框
+=======
+        
+    def box_iou(self, b1, b2):
+        """
+        输入为：
+        ----------
+        b1: tensor, shape=(batch, anchor_num, feat_w, feat_h, 4), xywh
+        b2: tensor, shape=(batch, anchor_num, feat_w, feat_h, 4), xywh
+>>>>>>> d77e91e7dec0defe6f1a342ec418783abc2f5b78
 
         返回为:
         -------
-        ciou: tensor, shape=(batch, feat_w, feat_h, anchor_num, 1)
+        out: tensor, shape=(batch, anchor_num, feat_w, feat_h)
         """
         #----------------------------------------------------#
         #   求出预测框左上角右下角
         #----------------------------------------------------#
         b1_xy       = b1[..., :2]
         b1_wh       = b1[..., 2:4]
-        b1_wh_half  = b1_wh/2.
+        b1_wh_half  = b1_wh / 2.
         b1_mins     = b1_xy - b1_wh_half
         b1_maxes    = b1_xy + b1_wh_half
         #----------------------------------------------------#
@@ -76,12 +88,12 @@ class YOLOLoss(nn.Module):
         #----------------------------------------------------#
         b2_xy       = b2[..., :2]
         b2_wh       = b2[..., 2:4]
-        b2_wh_half  = b2_wh/2.
+        b2_wh_half  = b2_wh / 2.
         b2_mins     = b2_xy - b2_wh_half
         b2_maxes    = b2_xy + b2_wh_half
 
         #----------------------------------------------------#
-        #   求真实框和预测框所有的iou
+        #   求真实框和预测框的iou
         #----------------------------------------------------#
         intersect_mins  = torch.max(b1_mins, b2_mins)
         intersect_maxes = torch.min(b1_maxes, b2_maxes)
@@ -95,14 +107,20 @@ class YOLOLoss(nn.Module):
         #----------------------------------------------------#
         #   计算中心的差距
         #----------------------------------------------------#
+<<<<<<< HEAD
         center_distance = torch.sum(torch.pow((b1_xy - b2_xy), 2), axis=-1)
 
+=======
+        center_wh       = b1_xy - b2_xy
+        
+>>>>>>> d77e91e7dec0defe6f1a342ec418783abc2f5b78
         #----------------------------------------------------#
         #   找到包裹两个框的最小框的左上角和右下角
         #----------------------------------------------------#
         enclose_mins    = torch.min(b1_mins, b2_mins)
         enclose_maxes   = torch.max(b1_maxes, b2_maxes)
         enclose_wh      = torch.max(enclose_maxes - enclose_mins, torch.zeros_like(intersect_maxes))
+<<<<<<< HEAD
         #----------------------------------------------------#
         #   计算对角线距离
         #----------------------------------------------------#
@@ -123,6 +141,72 @@ class YOLOLoss(nn.Module):
         # 最后减去αv
         ciou    = ciou - alpha * v
         return ciou
+=======
+
+        if self.iou_type == 'ciou':
+            #----------------------------------------------------#
+            #   计算中心的距离
+            #----------------------------------------------------#
+            center_distance     = torch.sum(torch.pow(center_wh, 2), axis=-1)
+            #----------------------------------------------------#
+            #   计算对角线距离
+            #----------------------------------------------------#
+            enclose_diagonal    = torch.sum(torch.pow(enclose_wh, 2), axis=-1)
+            ciou                = iou - 1.0 * (center_distance) / torch.clamp(enclose_diagonal, min = 1e-6)
+            
+            v       = (4 / (math.pi ** 2)) * torch.pow((torch.atan(b1_wh[..., 0] / torch.clamp(b1_wh[..., 1],min = 1e-6)) - torch.atan(b2_wh[..., 0] / torch.clamp(b2_wh[..., 1], min = 1e-6))), 2)
+            alpha   = v / torch.clamp((1.0 - iou + v), min = 1e-6)
+            out     = ciou - alpha * v
+            
+        elif self.iou_type == 'siou':
+            #----------------------------------------------------#
+            #   Angle cost
+            #----------------------------------------------------#
+            #----------------------------------------------------#
+            #   计算中心的距离
+            #----------------------------------------------------#
+            sigma       = torch.pow(torch.sum(torch.pow(center_wh, 2), axis=-1), 0.5)
+            
+            #----------------------------------------------------#
+            #   求h和w方向上的sin比值
+            #----------------------------------------------------#
+            sin_alpha_1 = torch.clamp(torch.abs(center_wh[..., 0]) / torch.clamp(sigma, min = 1e-6), min = 0, max = 1)
+            sin_alpha_2 = torch.clamp(torch.abs(center_wh[..., 1]) / torch.clamp(sigma, min = 1e-6), min = 0, max = 1)
+            
+            #----------------------------------------------------#
+            #   求门限，二分之根号二，0.707
+            #   如果门限大于0.707，代表某个方向的角度大于45°
+            #   此时取另一个方向的角度
+            #----------------------------------------------------#
+            threshold   = pow(2, 0.5) / 2
+            sin_alpha   = torch.where(sin_alpha_1 > threshold, sin_alpha_2, sin_alpha_1)
+
+            #----------------------------------------------------#
+            #   alpha越接近于45°，angle_cost越接近于1，gamma越接近于1
+            #   alpha越接近于0°，angle_cost越接近于0，gamma越接近于2
+            #----------------------------------------------------#
+            angle_cost  = torch.cos(torch.asin(sin_alpha) * 2 - math.pi / 2)
+            gamma       = 2 - angle_cost
+
+            #----------------------------------------------------#
+            #   Distance cost
+            #   求中心与外包围举行高宽的比值
+            #----------------------------------------------------#
+            rho_x           = (center_wh[..., 0] / torch.clamp(enclose_wh[..., 0], min = 1e-6)) ** 2
+            rho_y           = (center_wh[..., 1] / torch.clamp(enclose_wh[..., 1], min = 1e-6)) ** 2
+            distance_cost   = 2 - torch.exp(-gamma * rho_x) - torch.exp(-gamma * rho_y)
+            
+            #----------------------------------------------------#
+            #   Shape cost
+            #   真实框与预测框的宽高差异与最大值的比值
+            #   差异越小，costshape_cost越小
+            #----------------------------------------------------#
+            omiga_w     = torch.abs(b1_wh[..., 0] - b2_wh[..., 0]) / torch.clamp(torch.max(b1_wh[..., 0], b2_wh[..., 0]), min = 1e-6)
+            omiga_h     = torch.abs(b1_wh[..., 1] - b2_wh[..., 1]) / torch.clamp(torch.max(b1_wh[..., 1], b2_wh[..., 1]), min = 1e-6)
+            shape_cost  = torch.pow(1 - torch.exp(-1 * omiga_w), 4) + torch.pow(1 - torch.exp(-1 * omiga_h), 4)
+            out         = iou - 0.5 * (distance_cost + shape_cost)
+        return out 
+>>>>>>> d77e91e7dec0defe6f1a342ec418783abc2f5b78
 
     #---------------------------------------------------#
     #   平滑标签
@@ -223,9 +307,10 @@ class YOLOLoss(nn.Module):
         if n != 0:
             #---------------------------------------------------------------#
             #   计算预测结果和真实结果的差距
-            #   loss_loc ciou回归损失
+            #   loss_loc iou回归损失
             #   loss_cls 分类损失
             #---------------------------------------------------------------#
+<<<<<<< HEAD
             ciou        = self.box_ciou(pred_boxes, y_true[..., :4]).type_as(x)
             # loss_loc    = torch.mean((1 - ciou)[obj_mask] * box_loss_scale[obj_mask])
             loss_loc    = torch.mean((1 - ciou)[obj_mask])
@@ -233,6 +318,13 @@ class YOLOLoss(nn.Module):
             #-----------------------------------------------------------#
             #   所有正样本分类损失,不使用交叉熵,用的是BCELoss   y_true[..., 4] == 1 包含物体才计算损失
             #-----------------------------------------------------------#
+=======
+            iou         = self.box_iou(pred_boxes, y_true[..., :4]).type_as(x)
+            obj_mask    = obj_mask & torch.logical_not(torch.isnan(iou))
+            loss_loc    = torch.mean((1 - iou)[obj_mask])
+            # loss_loc    = torch.mean((1 - iou)[obj_mask] * box_loss_scale[obj_mask])
+            
+>>>>>>> d77e91e7dec0defe6f1a342ec418783abc2f5b78
             loss_cls    = torch.mean(self.BCELoss(pred_cls[obj_mask], y_true[..., 5:][obj_mask]))
 
             # loss总和
