@@ -104,8 +104,21 @@ $$
 
 通过如下公式就可以实现**控制正负样本的权重**和**控制容易分类和难分类样本的权重**。
 $$
-\mathrm{FL}\left(p_{\mathrm{t}}\right)=-\alpha_{\mathrm{t}}\left(1-p_{\mathrm{t}}\right)^{\gamma} \log \left(p_{\mathrm{t}}\right)
+\mathrm{FL}\left(p_{\mathrm{t}}\right)
+=
+-\alpha_{\mathrm{t}}\left(1-p_{\mathrm{t}}\right)^{\gamma} \log \left(p_{\mathrm{t}}\right)
 $$
+
+分解开就是：
+$$
+\mathrm{FL}\left(p_{\mathrm{t}}\right)
+=
+\left\{\begin{array}{cc}
+-\log (p) * \alpha * (1-p)^{\gamma} &  \text  { if } y=1 \\
+-\log (1-p) *(1-\alpha) * p^{\gamma} & \text { if } y=0
+\end{array}\right.
+$$
+
 
 # 实现方式
 
