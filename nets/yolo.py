@@ -95,7 +95,7 @@ def yolo_head(filters_list, in_filters):
 class YoloBody(nn.Module):
     def __init__(self, anchors_mask, num_classes, pretrained = False):
         super(YoloBody, self).__init__()
-        #---------------------------------------------------#   
+        #---------------------------------------------------#
         #   生成CSPdarknet53的主干模型
         #   获得三个有效特征层，他们的shape分别是：
         #   52,52,256
@@ -107,9 +107,9 @@ class YoloBody(nn.Module):
         #---------------------------------------------------#
         #   SPP部分,不同分支池化
         #---------------------------------------------------#
-        self.conv1      = make_three_conv([512,1024], 1024)     # 13,13,1024 -> 13,13, 512
+        self.conv1      = make_three_conv([512, 1024], 1024)    # 13,13,1024 -> 13,13, 512
         self.SPP        = SpatialPyramidPooling()               # 13,13, 512 -> 13,13,2048
-        self.conv2      = make_three_conv([512,1024], 2048)     # 13,13,2048 -> 13,13, 512
+        self.conv2      = make_three_conv([512, 1024], 2048)    # 13,13,2048 -> 13,13, 512
 
         #---------------------------------------------------#
         #   上采样部分 2次    p3,p4要先进行1x1卷积降低维度
@@ -157,40 +157,40 @@ class YoloBody(nn.Module):
         #---------------------------------------------------#
         P5_upsample = self.upsample1(P5)        # 13,13,512 -> 26,26,256
         P4 = self.conv_for_P4(out4)             # 26,26,512 -> 26,26,256    拼接之前的1x1conv
-        P4 = torch.cat([P4, P5_upsample], dim=1)# 26,26,256 + 26,26,256 -> 26,26,512
+        P4 = torch.cat([P4, P5_upsample], dim=1)# 26,26,256 cat 26,26,256 -> 26,26,512
         P4 = self.make_five_conv1(P4)           # 26,26,512 -> 26,26,256
 
         P4_upsample = self.upsample2(P4)        # 26,26,256 -> 52,52,128
         P3 = self.conv_for_P3(out3)             # 52,52,256 -> 52,52,128    拼接之前的1x1conv
-        P3 = torch.cat([P3, P4_upsample], dim=1)# 52,52,128 + 52,52,128 -> 52,52,256
-        P3 = self.make_five_conv2(P3)           # 52,52,256 -> 52,52,128
+        P3 = torch.cat([P3, P4_upsample], dim=1)# 52,52,128 cat 52,52,128 -> 52,52,256
+        P3_out = self.make_five_conv2(P3)       # 52,52,256 -> 52,52,128
 
         #---------------------------------------------------#
         #   下采样部分 2次 重新计算P4 P5
         #---------------------------------------------------#
-        P3_downsample = self.down_sample1(P3)       # 52,52,128 -> 26,26,256
-        P4 = torch.cat([P3_downsample, P4], dim=1)  # 26,26,256 + 26,26,256 -> 26,26,512
-        P4 = self.make_five_conv3(P4)               # 26,26,512 -> 26,26,256
+        P3_downsample = self.down_sample1(P3_out)   # 52,52,128 -> 26,26,256
+        P4 = torch.cat([P3_downsample, P4], dim=1)  # 26,26,256 cat 26,26,256 -> 26,26,512
+        P4_out = self.make_five_conv3(P4)           # 26,26,512 -> 26,26,256
 
-        P4_downsample = self.down_sample2(P4)
-        P5 = torch.cat([P4_downsample, P5], dim=1)  # 13,13,512 + 13,13,512 -> 13,13,1024
-        P5 = self.make_five_conv4(P5)               # 13,13,1024 -> 13,13,512
+        P4_downsample = self.down_sample2(P4_out)
+        P5 = torch.cat([P4_downsample, P5], dim=1)  # 13,13,512 cat 13,13,512 -> 13,13,1024
+        P5_out = self.make_five_conv4(P5)           # 13,13,1024 -> 13,13,512
 
         #---------------------------------------------------#
         #   第三个特征层
         #   y3=(batch_size,75,52,52)
         #---------------------------------------------------#
-        out2 = self.yolo_head3(P3)
+        out2 = self.yolo_head3(P3_out)
         #---------------------------------------------------#
         #   第二个特征层
         #   y2=(batch_size,75,26,26)
         #---------------------------------------------------#
-        out1 = self.yolo_head2(P4)
+        out1 = self.yolo_head2(P4_out)
         #---------------------------------------------------#
         #   第一个特征层
         #   y1=(batch_size,75,13,13)
         #---------------------------------------------------#
-        out0 = self.yolo_head1(P5)
+        out0 = self.yolo_head1(P5_out)
 
         return out0, out1, out2
 
